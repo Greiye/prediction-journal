@@ -1,0 +1,4 @@
+# Private entries stay on your machine / Obsidian vault only
+entries/private/
+# Rebuilt by the Pages workflow
+entries/manifest.json
