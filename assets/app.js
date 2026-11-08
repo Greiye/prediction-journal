@@ -133,15 +133,12 @@
       const end = endX;
       parts.push(`<path d="M${fx},${my} C${fx + 40},${my} ${fx + 30},${wy} ${fx + 80},${wy} L${end},${wy}" fill="none" stroke="${c}" stroke-width="2.5" stroke-dasharray="6 5"/>`);
       parts.push(`<rect x="${fx - 7}" y="${my - 7}" width="14" height="14" transform="rotate(45 ${fx} ${my})" fill="var(--surface)" stroke="${mc}" stroke-width="2.5"><title>${esc(f.question)}</title></rect>`);
-      wrap(f.question, 22).forEach((ln, i) => parts.push(`<text class="tl-label" font-weight="600" x="${fx + 12}" y="${my - 30 + i * 14}">${esc(ln)}</text>`));
+      const ql = wrap(f.question, 30).slice(0, 2);
+      ql.forEach((ln, i) => parts.push(`<text class="tl-label" font-weight="600" x="${fx + 12}" y="${my - 14 - (f.taken ? 14 : 0) - (ql.length - 1 - i) * 14}">${esc(ln)}</text>`));
       const altLines = [...wrap(f.alt, 30), ...wrap(f.alt_outcome ? "→ " + f.alt_outcome : "", 34)];
-      altLines.slice(0, 4).forEach((ln, i) => parts.push(`<text class="${i < wrap(f.alt, 30).length ? "tl-label" : "tl-sub"}" x="${fx + 90}" y="${wy + 22 + i * 14}">${esc(ln)}</text>`));
+      altLines.slice(0, 4).forEach((ln, i) => parts.push(`<text class="${i < wrap(f.alt, 30).length ? "tl-label" : "tl-sub"}" x="${Math.min(fx + 90, W - 230)}" y="${wy + 22 + i * 14}">${esc(ln)}</text>`));
       parts.push(`<circle cx="${end}" cy="${wy}" r="5" fill="var(--surface)" stroke="${c}" stroke-width="2.5" stroke-dasharray="2 2"/>`);
-      if (f.taken) {
-        const tl = wrap("Taken: " + f.taken, 34);
-        const tx = Math.max(fx + 150, Math.min(fx + 150, end - 200));
-        tl.forEach((ln, i) => parts.push(`<text class="tl-sub" x="${tx}" y="${my - 12 - (tl.length - 1 - i) * 13}">${esc(ln)}</text>`));
-      }
+      if (f.taken) parts.push(`<text class="tl-sub" x="${fx + 12}" y="${my - 12}">${esc("Taken: " + f.taken)}</text>`);
     });
 
     // events, with simple collision handling per lane (alternate above / below)
@@ -167,7 +164,7 @@
     // review flag
     if (review) {
       const rx = x(review), y = laneY("me");
-      parts.push(`<g><title>Review on ${esc(fmtDate(meta.review_on))}</title><path d="M${rx},${y + 10} L${rx},${y - 22} L${rx + 14},${y - 17} L${rx},${y - 12}" fill="${col("me")}" stroke="${col("me")}" stroke-width="2" stroke-linejoin="round"/><text class="tl-sub" x="${rx + 18}" y="${y - 12}">Review</text></g>`);
+      parts.push(`<g><title>Review on ${esc(fmtDate(meta.review_on))}</title><path d="M${rx},${y - 8} L${rx},${y + 30} L${rx + 14},${y + 25} L${rx},${y + 20}" fill="${col("me")}" stroke="${col("me")}" stroke-width="2" stroke-linejoin="round"/><text class="tl-sub" x="${rx + 18}" y="${y + 29}">Review ${esc(fmtDate(meta.review_on))}</text></g>`);
     }
 
     // lag
