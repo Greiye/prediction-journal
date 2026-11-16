@@ -81,9 +81,11 @@
     const events = (meta.events || []).filter((e) => parseDate(e.date)).map((e) => ({ ...e, d: parseDate(e.date), lane: (e.lane || "me").toLowerCase() }));
     const forks = (meta.forks || []).filter((f) => parseDate(f.date)).map((f) => ({ ...f, d: parseDate(f.date) }));
     const review = parseDate(meta.review_on);
+    const cutoff = parseDate(meta.cutoff);
     const now = new Date();
     const dates = [...events.map((e) => e.d), ...forks.map((f) => f.d), now];
     if (review) dates.push(review);
+    if (cutoff) dates.push(cutoff);
     if (!events.length && !forks.length) return { svg: `<div class="empty">No events yet. Add <code>events:</code> to the frontmatter.</div>`, lag: [] };
 
     const min = new Date(Math.min(...dates)); min.setUTCMonth(min.getUTCMonth() - 4);
@@ -122,6 +124,14 @@
         }
       }
     });
+
+    // backtest cutoff: everything right of it is hindsight
+    if (cutoff) {
+      const cx = x(cutoff);
+      parts.push(`<rect class="tl-hindsight" x="${cx}" y="${top - 8}" width="${W - padR - cx}" height="${H - top}"><title>After cutoff: hindsight, not available to the blind prediction</title></rect>`);
+      parts.push(`<line class="tl-cutoff" x1="${cx}" x2="${cx}" y1="${top - 22}" y2="${H - 8}"/>`);
+      parts.push(`<text class="tl-cutoff-label" x="${cx + 4}" y="${top - 14}">Cutoff ${esc(fmtDate(meta.cutoff))} · hindsight →</text>`);
+    }
 
     // today
     parts.push(`<line class="tl-now" x1="${x(now)}" x2="${x(now)}" y1="${top - 8}" y2="${H - 8}"/>`);
@@ -204,9 +214,26 @@
     return `<svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Calibration chart">${g}</svg><p class="muted" style="font-size:13px">On the dashed line = well calibrated. Below it = overconfident.</p>`;
   }
 
+  // ---------- backtest ----------
+  function renderBacktest(m) {
+    const signals = (m.signals || []).filter((s) => s && s.label);
+    const rules = (m.rules || []).filter(Boolean);
+    if (!signals.length && !rules.length) return "";
+    const cutoff = parseDate(m.cutoff);
+    const sig = signals.map((s) => {
+      const late = cutoff && parseDate(s.date) && parseDate(s.date) > cutoff;
+      return `<li class="${s.acted ? "acted" : "missed"}"><span class="mark">${s.acted ? "✓" : "✗"}</span><span><b>${esc(s.label)}</b><br><span class="muted">${esc(fmtDate(s.date))}${s.source ? " · " + esc(s.source) : ""}${late ? " · <em>after cutoff: lookahead?</em>" : ""}</span></span></li>`;
+    }).join("");
+    const acted = signals.filter((s) => s.acted).length;
+    return `<section class="backtest-grid">
+      ${signals.length ? `<div class="card"><h3>Signals before cutoff <span class="muted">(${acted}/${signals.length} acted on)</span></h3><ul class="signals">${sig}</ul></div>` : ""}
+      ${rules.length ? `<div class="card"><h3>Rules extracted</h3><ol class="rules">${rules.map((r) => `<li>${esc(r)}</li>`).join("")}</ol></div>` : ""}
+    </section>`;
+  }
+
   // ---------- views ----------
   const scoreBadge = (s) => `<span class="badge ${esc(s || "open")}">${esc((s || "open").replace(/^./, (c) => c.toUpperCase()))}</span>`;
-  const badges = (m) => `<div class="badges">${scoreBadge(m.score)}${m.domain ? `<span class="badge">${esc(m.domain)}</span>` : ""}${typeof m.confidence === "number" ? `<span class="badge">${m.confidence}% sure</span>` : ""}${m.private ? `<span class="badge">Private</span>` : ""}</div>`;
+  const badges = (m) => `<div class="badges">${scoreBadge(m.score)}${m.domain ? `<span class="badge">${esc(m.domain)}</span>` : ""}${typeof m.confidence === "number" ? `<span class="badge">${m.confidence}% sure</span>` : ""}${m.private ? `<span class="badge">Private</span>` : ""}${m.type === "backtest" ? `<span class="badge backtest">Backtest</span>` : ""}</div>`;
 
   function viewHome() {
     const scored = ENTRIES.filter((e) => e.meta.score in SCORE_VALUE);
@@ -248,6 +275,7 @@
           <h1>${esc(m.title || e.file)}</h1>
           ${m.claim ? `<p class="lead" style="margin-bottom:10px">“${esc(m.claim)}”${m.timeframe ? ` <span class="muted">${/^(by|in|within|before|after)\b/i.test(m.timeframe) ? "" : "within "}${esc(m.timeframe)}</span>` : ""}</p>` : ""}
           ${badges(m)}
+          ${m.type === "backtest" ? `<p class="muted" style="font-size:13px;margin:8px 0 0">Blind prediction as of <b>${esc(fmtDate(m.cutoff) || "?")}</b>${m.backtest_of ? ` · replays <a href="#/entry/${encodeURIComponent(str(m.backtest_of))}">#${esc(str(m.backtest_of))}</a>` : ""}</p>` : ""}
         </div>
         <button class="btn ghost" id="dl-md" type="button">Download .md</button>
       </div>
@@ -259,9 +287,11 @@
           <span><i style="color:var(--me);border-color:var(--me)"></i>Me</span>
           <span><i class="dash" style="border-color:var(--whatif)"></i>Path not taken</span>
           <span><i class="dot" style="border-color:var(--muted);border-style:dashed"></i>Approx. date</span>
+          ${m.cutoff ? `<span><i class="dash" style="border-color:var(--cutoff)"></i>Backtest cutoff</span>` : ""}
         </div>
         <div class="lag" id="lag"></div>
       </section>
+      ${renderBacktest(m)}
       <article class="prose">${marked.parse(body)}</article>`;
     const draw = () => {
       const host = document.getElementById("tl");
@@ -282,8 +312,10 @@
     try {
       const tpl = await (await fetch("templates/prediction.md")).text();
       root.folder("Templates").file("prediction.md", tpl);
-    } catch (_) { /* template optional */ }
-    root.file("README.md", "# Prediction Journal\n\nOpen this folder in Obsidian as a vault.\n\nNew entry: Settings → Core plugins → Templates → set template folder to `Templates`, then run *Templates: Insert template* → `prediction`.\n");
+      const bt = await fetch("templates/backtest.md");
+      if (bt.ok) root.folder("Templates").file("backtest.md", await bt.text());
+    } catch (_) { /* templates optional */ }
+    root.file("README.md", "# Prediction Journal\n\nOpen this folder in Obsidian as a vault.\n\nNew entry: Settings → Core plugins → Templates → set template folder to `Templates`, then run *Templates: Insert template* → `prediction` (or `backtest`).\n");
     download("prediction-journal-vault.zip", await zip.generateAsync({ type: "blob" }));
   }
 
