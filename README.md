@@ -3,6 +3,12 @@
 A personal prediction journal. Each entry is a Markdown file with YAML frontmatter in `entries/`. The site renders each entry as a swim-lane timeline (World / Circle / Me / What if) with decision forks, adoption lag and calibration.
 
 ## Add an entry
+**On the site:** click **+ New entry** (or **Edit** / **Backtest this** on an entry). The pop-up form builds the Markdown for you. Then:
+- **Save draft & preview** shows it on the site, in this browser only.
+- **Download .md** or **Copy .md** puts it in your vault. Private entries go in `entries/private/`.
+- **Publish on GitHub** opens GitHub's new-file page with the entry filled in. Click *Commit*. This is blocked for private entries.
+
+**By hand:**
 1. Copy `templates/prediction.md` to `entries/NNN-short-name.md`.
 2. Fill the frontmatter (`events`, `forks`, `confidence`, `score`, `review_on`) and the body.
 3. Commit and push. The Pages workflow rebuilds `entries/manifest.json` automatically.

@@ -64,16 +64,47 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
+  // ---------- drafts (this browser only) ----------
+  const DRAFT_KEY = "pj-drafts";
+  function readDrafts() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}") || {}; } catch (_) { return {}; } }
+  function writeDrafts(d) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); return true; } catch (_) { return false; } }
+  function toEntry(file, raw, draft) {
+    const { meta, body } = splitFrontmatter(raw);
+    if (file.startsWith("private/")) meta.private = true;
+    return { file, raw, meta, body, draft, id: str(meta.id || file.replace(/^private\//, "").replace(/\.md$/, "")) };
+  }
+  const sortEntries = (list) => list.sort((a, b) => (parseDate(b.meta.date_noticed) || 0) - (parseDate(a.meta.date_noticed) || 0));
+  function mergeDrafts(list) {
+    const drafts = Object.values(readDrafts()).map((d) => toEntry(d.file, d.raw, true));
+    const ids = new Set(drafts.map((d) => d.id));
+    return sortEntries([...list.filter((e) => !ids.has(e.id)), ...drafts]);
+  }
+  let PUBLISHED = [];
+  function saveDraft(out) {
+    const d = readDrafts();
+    const id = str(out.meta.id);
+    d[id] = { file: out.file, raw: out.raw };
+    if (!writeDrafts(d)) alertNote("Browser storage is blocked, so the draft only lasts until you reload. Download the .md to keep it.");
+    const e = toEntry(out.file, out.raw, true);
+    ENTRIES = sortEntries([...ENTRIES.filter((x) => x.id !== id), e]);
+    if (location.hash === "#/entry/" + encodeURIComponent(id)) route();
+    return id;
+  }
+  function discardDraft(id) {
+    const d = readDrafts(); delete d[id]; writeDrafts(d);
+    ENTRIES = mergeDrafts(PUBLISHED);
+  }
+  function alertNote(msg) { console.warn(msg); const n = document.createElement("div"); n.className = "toast"; n.textContent = msg; document.body.appendChild(n); setTimeout(() => n.remove(), 6000); }
+
   // ---------- data ----------
   async function loadEntries() {
     const res = await fetch("entries/manifest.json", { cache: "no-store" });
     const files = await res.json();
     const out = await Promise.all(files.map(async (file) => {
       const raw = await (await fetch("entries/" + file, { cache: "no-store" })).text();
-      const { meta, body } = splitFrontmatter(raw);
-      return { file, raw, meta, body, id: str(meta.id || file.replace(/\.md$/, "")) };
+      return toEntry(file, raw, false);
     }));
-    return out.sort((a, b) => (parseDate(b.meta.date_noticed) || 0) - (parseDate(a.meta.date_noticed) || 0));
+    return sortEntries(out);
   }
 
   // ---------- timeline ----------
@@ -234,6 +265,7 @@
   // ---------- views ----------
   const scoreBadge = (s) => `<span class="badge ${esc(s || "open")}">${esc((s || "open").replace(/^./, (c) => c.toUpperCase()))}</span>`;
   const badges = (m) => `<div class="badges">${scoreBadge(m.score)}${m.domain ? `<span class="badge">${esc(m.domain)}</span>` : ""}${typeof m.confidence === "number" ? `<span class="badge">${m.confidence}% sure</span>` : ""}${m.private ? `<span class="badge">Private</span>` : ""}${m.type === "backtest" ? `<span class="badge backtest">Backtest</span>` : ""}</div>`;
+  const draftBadge = (e) => (e.draft ? `<span class="badge draft" title="Saved in this browser only. Download or publish to keep it.">Draft</span>` : "");
 
   function viewHome() {
     const scored = ENTRIES.filter((e) => e.meta.score in SCORE_VALUE);
@@ -255,7 +287,7 @@
           <a class="card entry-card" href="#/entry/${encodeURIComponent(e.id)}">
             <div class="num">#${esc(e.id)}</div>
             <div><div class="t">${esc(e.meta.title || e.file)}</div><div class="c">${esc(e.meta.claim || "")}</div></div>
-            <div>${badges(e.meta)}<div class="muted" style="font-size:12px;margin-top:6px;text-align:right">${esc(fmtDate(e.meta.date_noticed))}</div></div>
+            <div>${badges(e.meta)}${e.draft ? `<div class="badges" style="justify-content:flex-end;margin-top:4px">${draftBadge(e)}</div>` : ""}<div class="muted" style="font-size:12px;margin-top:6px;text-align:right">${esc(fmtDate(e.meta.date_noticed))}</div></div>
           </a>`).join("") || `<div class="card empty">No entries yet.</div>`}
       </section>
       <h2>Calibration</h2>
@@ -277,7 +309,12 @@
           ${badges(m)}
           ${m.type === "backtest" ? `<p class="muted" style="font-size:13px;margin:8px 0 0">Blind prediction as of <b>${esc(fmtDate(m.cutoff) || "?")}</b>${m.backtest_of ? ` · replays <a href="#/entry/${encodeURIComponent(str(m.backtest_of))}">#${esc(str(m.backtest_of))}</a>` : ""}</p>` : ""}
         </div>
-        <button class="btn ghost" id="dl-md" type="button">Download .md</button>
+        <div class="entry-actions">
+          ${e.draft ? `<span class="badge draft">Draft: this browser only</span><button class="btn ghost" id="discard" type="button">Discard draft</button>` : ""}
+          ${m.type !== "backtest" ? `<button class="btn ghost" id="bt-this" type="button">Backtest this</button>` : ""}
+          <button class="btn ghost" id="edit" type="button">Edit</button>
+          <button class="btn ghost" id="dl-md" type="button">Download .md</button>
+        </div>
       </div>
       <section class="card timeline-card">
         <div class="timeline-scroll" id="tl"></div>
@@ -302,7 +339,12 @@
     };
     draw();
     window.onresize = draw;
-    document.getElementById("dl-md").onclick = () => download(e.file, e.raw);
+    document.getElementById("dl-md").onclick = () => download(e.file.split("/").pop(), e.raw);
+    document.getElementById("edit").onclick = () => EntryForm.open({ entry: e });
+    const bt = document.getElementById("bt-this");
+    if (bt) bt.onclick = () => EntryForm.open({ type: "backtest", backtestOf: e.id });
+    const dc = document.getElementById("discard");
+    if (dc) dc.onclick = () => { discardDraft(e.id); location.hash = ENTRIES.some((x) => x.id === e.id) ? "#/entry/" + encodeURIComponent(e.id) : "#/"; route(); };
   }
 
   async function exportVault() {
@@ -327,6 +369,8 @@
   }
 
   document.getElementById("export-vault").onclick = exportVault;
-  loadEntries().then((list) => { ENTRIES = list; route(); window.addEventListener("hashchange", route); })
+  EntryForm.init({ entries: () => ENTRIES, saveDraft, download });
+  document.getElementById("new-entry").onclick = () => EntryForm.open();
+  loadEntries().then((list) => { PUBLISHED = list; ENTRIES = mergeDrafts(list); route(); window.addEventListener("hashchange", route); })
     .catch((err) => { app.innerHTML = `<div class="card empty">Could not load entries (${esc(err.message)}). Serve the folder over HTTP, not file://.</div>`; });
 })();
