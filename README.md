@@ -3,9 +3,24 @@
 A personal prediction journal. Each entry is a Markdown file with YAML frontmatter in `entries/`. The site renders each entry as a swim-lane timeline (World / Circle / Me / What if) with decision forks, adoption lag and calibration.
 
 ## Add an entry
+**On the site:** click **+ New entry** (or **Edit** / **Backtest this** on an entry). The pop-up form builds the Markdown for you. Then:
+- **Save draft & preview** shows it on the site, in this browser only.
+- **Download .md** or **Copy .md** puts it in your vault. Private entries go in `entries/private/`.
+- **Publish on GitHub** opens GitHub's new-file page with the entry filled in. Click *Commit*. This is blocked for private entries.
+
+**By hand:**
 1. Copy `templates/prediction.md` to `entries/NNN-short-name.md`.
 2. Fill the frontmatter (`events`, `forks`, `confidence`, `score`, `review_on`) and the body.
 3. Commit and push. The Pages workflow rebuilds `entries/manifest.json` automatically.
+
+## Backtests
+Replay a past turning point to test your judgment without hindsight.
+1. Copy `templates/backtest.md` to `entries/NNN-backtest-short-name.md`; set `backtest_of` and a `cutoff` date.
+2. Gather only evidence dated before the cutoff (notes, texts, Wayback Machine, date-filtered search).
+3. Write the blind prediction (`claim`, `confidence`) before looking at the outcome. Optional: ask an AI "It is [cutoff], you know nothing after".
+4. Unblind, `score` it, list `signals` (with `acted: true|false`) and the `rules` you extract.
+
+The site draws the cutoff on the timeline, shades the hindsight zone, and lists signals and rules. Backtest confidence/score feed the calibration chart.
 
 ## Obsidian
 - Clone this repo and open it as a vault, or use **Export vault (.zip)** on the site.
@@ -25,3 +40,8 @@ Put anything sensitive (named people, employer details) in `entries/private/`. T
 | `score` | `open`, `hit`, `partial`, `miss` |
 | `confidence` | 0-100 |
 | `forks[]` | `date`, `question`, `taken`, `alt`, `alt_outcome` |
+| `type` | `backtest` (omit for normal predictions) |
+| `cutoff` | `YYYY-MM-DD` freeze date for a backtest |
+| `backtest_of` | id of the entry being replayed |
+| `signals[]` | `date`, `label`, `source`, `acted` |
+| `rules[]` | strings |
