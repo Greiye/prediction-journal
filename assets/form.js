@@ -54,7 +54,7 @@
           <label class="f-private"><input type="checkbox" name="private"> <span><b>Private</b>: names people or my employer. Saved to <code>entries/private/</code> and never published.</span></label>
 
           <div class="f-grid">
-            <label class="f-id" title="Private entries are not on the site, so check your vault for numbers already used.">ID<input name="id" required></label>
+            <label class="f-id" title="Skips IDs listed in entries/reserved-ids.json (used by private entries).">ID<input name="id" required></label>
             <label class="f-span">Title<input name="title" required placeholder="e.g. Discovering AI (ChatGPT 3.5)"></label>
             <label><span class="f-bt-only">Date run</span><span class="f-pr-only">Date noticed</span><input name="date_noticed" placeholder="YYYY-MM-DD"></label>
             <label>Domain<select name="domain">${DOMAINS.map((d) => `<option value="${d}">${d || "—"}</option>`).join("")}</select></label>
@@ -147,8 +147,12 @@
     form.querySelector(`[data-rows="${kind}"]`).insertAdjacentHTML("beforeend", rowHtml(kind, data));
   }
 
+  // IDs used by private entries (not on the site). Numbers only, kept in entries/reserved-ids.json.
+  let RESERVED = [];
+  fetch("entries/reserved-ids.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : [])).then((ids) => { RESERVED = (ids || []).map(String); }).catch(() => {});
+
   function nextId(entries) {
-    const n = Math.max(0, ...entries.map((e) => parseInt(e.id, 10)).filter((x) => !isNaN(x)));
+    const n = Math.max(0, ...[...entries.map((e) => e.id), ...RESERVED].map((x) => parseInt(x, 10)).filter((x) => !isNaN(x)));
     return String(n + 1).padStart(3, "0");
   }
 
