@@ -27,6 +27,8 @@ The site draws the cutoff on the timeline, shades the hindsight zone, and lists 
 - Settings → Core plugins → Templates → template folder `templates`. Then *Templates: Insert template* → `prediction`.
 
 ## Private entries
+Add each private entry's ID (number only) to `entries/reserved-ids.json` so the form doesn't suggest it again.
+
 Put anything sensitive (named people, employer details) in `entries/private/`. That folder is gitignored, so it stays in your local vault and never reaches the public site. For local preview, list it in `entries/manifest.json` as `private/<file>.md`.
 
 ## Local preview
